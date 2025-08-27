@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TP 2 - Geolocalización + History</title>
+
+  <!-- leaflet -->
+  <link
+    rel="stylesheet" 
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <style>
+    #map { height: 400px; margin-top: 10px; }
+    button { margin: 5px; padding: 8px 15px; }
+  </style>
+</head>
+<body>
+  <h1>Historial de Recorrido</h1>
+  <div id="map"></div>
+
+  <!-- botones -->
+  <button id="start">Iniciar Seguimiento</button>
+  <button id="stop">Detener Seguimiento</button>
+  <button id="clear">Limpiar Historial</button>
+  <button onclick="window.history.back()">Atrás</button>
+  <button onclick="window.history.forward()">Adelante</button>
+
+  <h2>Historial de posiciones:</h2>
+  <ul id="history"></ul>
+
+  <script>
+    let map, polyline, watchId;
+    const positions = [];
+
+    //iniciamos el mapa en un punto por defecto
+    map = L.map('map').setView([-24.79, -65.41], 15);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    //iniciamos
+    document.getElementById('start').addEventListener('click', () => {
+      if (navigator.geolocation) {
+        watchId = navigator.geolocation.watchPosition(success, error, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0
+        });
+      } else {
+        alert("La geolocalización no es soportada en este navegador.");
+      }
+    });
+
+    //detener seguimiento
+    document.getElementById('stop').addEventListener('click', () => {
+      if (watchId) {
+        navigator.geolocation.clearWatch(watchId);
+        watchId = null;
+      }
+    });
+
+    //limpiar historial
+    document.getElementById('clear').addEventListener('click', () => {
+      positions.length = 0;
+      document.getElementById('history').innerHTML = "";
+      if (polyline) {
+        map.removeLayer(polyline);
+        polyline = null;
+      }
+    });
+
+    function success(pos) {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      const point = [lat, lon];
+
+      positions.push(point);
+
+      //dibujar linea
+      if (polyline) {
+        polyline.setLatLngs(positions);
+      } else {
+        polyline = L.polyline(positions, {color: 'red'}).addTo(map);
+      }
+
+      //marcador actual
+      L.marker(point).addTo(map)
+        .bindPopup(`Lat: ${lat}, Lon: ${lon}`)
+        .openPopup();
+
+      map.setView(point, 15);
+
+      //mostrar en lista HTML
+      const li = document.createElement("li");
+      li.textContent = `Lat: ${lat.toFixed(5)}, Lon: ${lon.toFixed(5)}`;
+      document.getElementById("history").appendChild(li);
+
+      //guardamos cada ubicación en el historial del navegador
+      const state = {lat, lon};
+      window.history.pushState(state, `Ubicación ${lat},${lon}`, `?lat=${lat}&lon=${lon}`);
+    }
+
+    function error(err) {
+      alert(`ERROR(${err.code}): ${err.message}`);
+    }
+
+    //evento al navegar en el historial (atrás/adelante)
+    window.onpopstate = function(event) {
+      if (event.state) {
+        const {lat, lon} = event.state;
+
+        //mostramos en lista que viene del historial
+        const li = document.createElement("li");
+        li.textContent = `Recuperado del historial → Lat: ${lat}, Lon: ${lon}`;
+        document.getElementById("history").appendChild(li);
+
+        //actualizamos el mapa
+        if (map) {
+          map.setView([lat, lon], 15);
+          L.marker([lat, lon]).addTo(map)
+            .bindPopup("Recuperado del historial 📍")
+            .openPopup();
+        }
+      }
+    };
+  </script>
+</body>
+</html>
